@@ -11,12 +11,12 @@ Contact Vanilla Forums Inc. at support [at] vanillaforums [dot] com
 // Define the plugin:
 $PluginInfo['Voting'] = array(
    'Name' => 'Voting',
-   'Description' => 'DEPRECATED. Upgrade to Reactions. Allows users to vote for comments and discussions. Administrators get unlimited votes.',
-   'Version' => '1.1.4',
+   'Description' => 'Allows users to vote for comments and discussions. Administrators get unlimited votes.',
+   'Version' => '1.2.0',
    'Author' => "Mark O'Sullivan",
    'AuthorEmail' => 'mark@vanillaforums.com',
    'AuthorUrl' => 'http://markosullivan.ca',
-   'RequiredApplications' => array('Vanilla' => '2.0.17'),
+   'RequiredApplications' => array('Vanilla' => '2.1'),
    'SettingsUrl' => '/settings/voting',
    'SettingsPermission' => 'Garden.Settings.Manage'
 );
@@ -176,6 +176,15 @@ class VotingPlugin extends Gdn_Plugin {
       return $Sort;
    }
 
+
+    /**
+     * Inserts the voting box after a comment has been added
+     */
+    public function DiscussionController_AfterDiscussionMeta_Handler($Sender) {
+        $this->DiscussionController_AfterCommentMeta_Handler($Sender);
+    }
+
+
 	/**
 	 * Insert sorting tabs after first comment.
 	 */
@@ -183,9 +192,9 @@ class VotingPlugin extends Gdn_Plugin {
 //		if (!C('Plugins.Voting.Enabled'))
 //			return;
 
-		$AnswerCount = $Sender->Discussion->CountComments - 1;
+		$AnswerCount = $Sender->Discussion->CountComments;
 		$Type = GetValue('Type', $Sender->EventArguments, 'Comment');
-		if ($Type == 'Comment' && !GetValue('VoteHeaderWritten', $Sender)) { //$Type != 'Comment' && $AnswerCount > 0) {
+		if ($Type == 'Comment' && !GetValue('VoteHeaderWritten', $Sender) && $Sender->Offset==0) {
 		?>
 		<li class="Item">
 			<div class="VotingSort">
@@ -281,11 +290,15 @@ class VotingPlugin extends Gdn_Plugin {
          // Allow admins to vote unlimited.
          $AllowVote = $Session->CheckPermission('Garden.Moderation.Manage');
          // Only allow users to vote up or down by 1.
-         if (!$AllowVote)
-            $AllowVote = $FinalVote > -2 && $FinalVote < 2;
+         if (!$AllowVote && ($FinalVote > -2 && $FinalVote < 2))
+            $AllowVote = true;
 
-         if ($AllowVote)
+         if ($AllowVote){
             $Total = $CommentModel->SetUserScore($CommentID, $Session->UserID, $FinalVote);
+         }else {
+            $FinalFinalVote = $OriginalScore + $OldUserVote;
+            $Total = $CommentModel->SetUserScore($CommentID, $Session->UserID, $FinalFinalVote);
+         }
 
          // Move the comment into or out of moderation.
          if (class_exists('LogModel')) {
